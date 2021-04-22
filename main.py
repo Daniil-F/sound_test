@@ -10,7 +10,7 @@ window = Window(master=root)
 stream = sd.InputStream(
     samplerate=SAMPLE_RATE,
     blocksize=BLOCK_SIZE,
-    callback=window.get_audio_input_callback(),
+    callback=window.audio_input_callback,
     channels=1
 )
 stream.start()
