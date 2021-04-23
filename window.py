@@ -20,25 +20,38 @@ class WindowMxVal(tk.Frame):
         self.mxvalL['text'] = str(self.mxval)
 
 
-class WindowGraphFft(tk.Frame):
-    _BUFFER_SIZE = 4096
+class AudioBufferWithLog:
+    _MX_LOG_SIZE = 10000
 
-    def __init__(self, master=None):
+    def __init__(self, buffer_size: int):
+        self.buffer_size = buffer_size
+        self.buffer = np.ndarray((0,))
+        self.log = list()
+
+    def append(self, fresh):
+        self.buffer = np.append(self.buffer, fresh)
+        if self.buffer.shape[0] > self.buffer_size:
+            self.buffer = self.buffer[-self.buffer_size:]
+
+    def new_snapshot(self, data: np.ndarray) -> list:
+        self.append(data)
+        dfft = np.abs(fft(self.buffer)[:64])
+        if len(self.log) < self._MX_LOG_SIZE:
+            self.log.append(np.max(dfft))
+        return [a for b, c in enumerate(dfft) for a in [b * 16, c]]
+
+
+class WindowGraphFft(tk.Frame):
+
+    def __init__(self, logs: list[AudioBufferWithLog], master=None):
         super().__init__(master)
         self.master = master
         self.pack()
-        self.pic = tk.Canvas(self, width=1024, height=512)
-        self.pic.pack()
-        self.buffer = np.ndarray((0,))
-
-    def _append_to_buffer(self, fresh):
-        self.buffer = np.append(self.buffer, fresh)
-        if self.buffer.shape[0] > self._BUFFER_SIZE:
-            self.buffer = self.buffer[-self._BUFFER_SIZE:]
+        self.pics = [(tk.Canvas(self, width=1024, height=512), log) for log in logs]
+        for can, _ in self.pics:
+            can.pack()
 
     def audio_input_callback(self, indata: np.ndarray, _1, _2, _3) -> None:
-        self._append_to_buffer(indata)
-        idfft = (abs(fft(self.buffer)))[:64]
-        pic = self.pic
-        pic.delete("all")
-        pic.create_line(*[a for b, c in enumerate(idfft) for a in [b * 16, c]])
+        for pic, log in self.pics:
+            pic.delete('all')
+            pic.create_line(log.new_snapshot(indata))
